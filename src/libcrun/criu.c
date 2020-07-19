@@ -425,6 +425,15 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
         criu_add_ext_mount (def->linux->masked_paths[i], "/dev/null");
     }
 
+  for (i = 0; i < def->linux->masked_paths_len; i++)
+    {
+      struct stat statbuf;
+      ret = stat (def->linux->masked_paths[i], &statbuf);
+      if (ret == 0 && S_ISREG(statbuf.st_mode))
+        criu_add_ext_mount (def->linux->masked_paths[i], "/dev/null");
+    }
+
+
   /* Mount the container rootfs for CRIU. */
   xasprintf (&root, "%s/criu-root", status->bundle);
 
@@ -481,6 +490,14 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
           criu_add_inherit_fd (inherit_fd, "extRootNetNS");
           break;
         }
+    }
+
+  for (i = 0; i < def->linux->masked_paths_len; i++)
+    {
+      struct stat statbuf;
+      ret = stat(def->linux->masked_paths[i], &statbuf);
+      if (ret == 0 && S_ISREG(statbuf.st_mode))
+        criu_add_ext_mount (def->linux->masked_paths[i], def->linux->masked_paths[i]);
     }
 
   /* Set boolean options . */
