@@ -39,7 +39,8 @@ enum
   OPTION_LEAVE_RUNNING,
   OPTION_TCP_ESTABLISHED,
   OPTION_SHELL_JOB,
-  OPTION_EXT_UNIX_SK
+  OPTION_EXT_UNIX_SK,
+  OPTION_MNG_CG_MODE
 };
 
 static char doc[] = "OCI runtime";
@@ -57,6 +58,8 @@ static struct argp_option options[] = {
    "allow open tcp connections", 0},
   {"ext-unix-sk", OPTION_EXT_UNIX_SK, 0, 0, "allow external unix sockets", 0},
   {"shell-job", OPTION_SHELL_JOB, 0, 0, "allow shell jobs", 0},
+  {"manage-cgroups-mode", OPTION_MNG_CG_MODE, "VALUE", 0,
+   "cgroups mode: 'soft' (default), 'full' and 'strict'"},
   {0,}
 };
 
@@ -65,6 +68,8 @@ static char args_doc[] = "checkpoint CONTAINER";
 static error_t
 parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
 {
+  const char *tmp;
+
   switch (key)
     {
     case ARGP_KEY_NO_ARGS:
@@ -94,6 +99,25 @@ parse_opt (int key, char *arg arg_unused, struct argp_state *state arg_unused)
       cr_options.shell_job = true;
       break;
 
+    case OPTION_MNG_CG_MODE:
+      tmp = argp_mandatory_argument (arg, state);
+      if (strcmp (tmp, "full") == 0)
+        {
+          cr_options.cg_mode = CR_CG_MODE_FULL;
+        }
+      else if (strcmp (tmp, "strict") == 0)
+        {
+          cr_options.cg_mode = CR_CG_MODE_STRICT;
+        }
+      else if (strcmp (tmp, "soft") == 0)
+        {
+          cr_options.cg_mode = CR_CG_MODE_SOFT;
+        }
+      else
+        {
+          libcrun_fail_with_error (0, "unknown cgroup mode specified");
+        }
+
     default:
       return ARGP_ERR_UNKNOWN;
     }
@@ -113,6 +137,8 @@ crun_command_checkpoint (struct crun_global_arguments *global_args, int argc,
   int ret;
 
   libcrun_context_t crun_context = { 0, };
+
+  cr_options.cg_mode = CR_CG_MODE_SOFT;
 
   argp_parse (&run_argp, argc, argv, ARGP_IN_ORDER, &first_arg, &cr_options);
   crun_assert_n_args (argc - first_arg, 1, 2);

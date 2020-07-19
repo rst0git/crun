@@ -72,6 +72,13 @@ typedef struct libcrun_container_status_s libcrun_container_status_t;
 typedef struct libcrun_container_s libcrun_container_t;
 typedef struct libcrun_context_s libcrun_context_t;
 
+enum cr_cg_mode
+{
+  CR_CG_MODE_SOFT = 3,
+  CR_CG_MODE_FULL,
+  CR_CG_MODE_STRICT,
+};
+
 struct libcrun_checkpoint_restore_s
 {
   char *image_path;
@@ -81,6 +88,7 @@ struct libcrun_checkpoint_restore_s
   bool shell_job;
   bool ext_unix_sk;
   bool detach;
+  enum cr_cg_mode cg_mode;
 };
 typedef struct libcrun_checkpoint_restore_s libcrun_checkpoint_restore_t;
 

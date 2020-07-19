@@ -204,6 +204,8 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
   criu_set_ext_unix_sk (cr_options->ext_unix_sk);
   criu_set_shell_job (cr_options->shell_job);
   criu_set_tcp_established (cr_options->tcp_established);
+  criu_set_manage_cgroups (true);
+  criu_set_manage_cgroups_mode (cr_options->cg_mode);
 
   /* Set up logging. */
   criu_set_log_level (4);
