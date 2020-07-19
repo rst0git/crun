@@ -38,6 +38,45 @@
 #define CRIU_RESTORE_LOG_FILE "restore.log"
 #define DESCRIPTORS_FILENAME "descriptors.json"
 
+static int
+add_ext_cgroup_mounts(libcrun_error_t *err)
+{
+  cleanup_free char *content = NULL;
+  int ret;
+  char *from;
+  char *saveptr = NULL;
+
+  ret = read_all_file ("/proc/self/cgroup", &content, NULL, err);
+  if (UNLIKELY (ret < 0))
+    return ret;
+
+  if (UNLIKELY (content == NULL || content[0] == '\0'))
+    return crun_make_error (err, 0, "invalid content from /proc/self/cgroup");
+
+  /* FIXME: The parsing logic is similar to do_mount_cgroup_v1() */
+  for (from = strtok_r (content, "\n", &saveptr); from; from = strtok_r (NULL, "\n", &saveptr))
+    {
+      char *subpath, *subsystem, *it;
+      cleanup_free char *source_subsystem = NULL;
+
+      subsystem = strchr (from, ':') + 1;
+      subpath = strchr (subsystem, ':') + 1;
+      *(subpath - 1) = '\0';
+
+      if (subsystem[0] == '\0')
+        continue;
+
+      it = strstr (subsystem, "name=");
+      if (it)
+        subsystem += 5;
+
+      xasprintf (&source_subsystem, "/sys/fs/cgroup/%s", subsystem);
+      criu_add_ext_mount (source_subsystem, source_subsystem);
+    }
+
+  return 0;
+}
+
 int
 libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
                                          libcrun_container_t *container,
@@ -501,6 +540,10 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
       if (ret == 0 && S_ISREG(statbuf.st_mode))
         criu_add_ext_mount (def->linux->masked_paths[i], def->linux->masked_paths[i]);
     }
+
+  ret = add_ext_cgroup_mounts(err);
+  if (UNLIKELY (ret < 0))
+    return crun_make_error (err, 0, "error adding external cgroup mounts\n");
 
   /* Set boolean options . */
   criu_set_ext_unix_sk (cr_options->ext_unix_sk);
