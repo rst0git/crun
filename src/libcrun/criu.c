@@ -32,11 +32,22 @@
 #include "container.h"
 #include "linux.h"
 #include "status.h"
+#include "terminal.h"
 #include "utils.h"
 
 #define CRIU_CHECKPOINT_LOG_FILE "dump.log"
 #define CRIU_RESTORE_LOG_FILE "restore.log"
 #define DESCRIPTORS_FILENAME "descriptors.json"
+
+int terminal_fd = -1;
+
+static int criu_restore_notify_cb(char *action, criu_notify_arg_t na)
+{
+  if (strncmp(action, "orphan-pts-master", 18))
+      terminal_fd = criu_get_orphan_pts_master_fd();
+
+  return 0;
+}
 
 static int
 add_ext_cgroup_mounts(libcrun_error_t *err)
@@ -245,6 +256,7 @@ libcrun_container_checkpoint_linux_criu (libcrun_container_status_t *status,
   criu_set_tcp_established (cr_options->tcp_established);
   criu_set_manage_cgroups (true);
   criu_set_manage_cgroups_mode (cr_options->cg_mode);
+  criu_set_orphan_pts_master(true);
 
   /* Set up logging. */
   criu_set_log_level (4);
@@ -552,6 +564,9 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
 
   criu_set_log_level (4);
   criu_set_log_file (CRIU_RESTORE_LOG_FILE);
+  criu_set_orphan_pts_master(true);
+  criu_set_notify_cb(criu_restore_notify_cb);
+
   ret = criu_restore_child ();
 
   /* criu_restore() returns the PID of the process of the restored process
@@ -570,6 +585,37 @@ libcrun_container_restore_linux_criu (libcrun_container_status_t *status,
   /* Update the status struct with the newly allocated PID. This will
    * be necessary later when moving the process into its cgroup. */
   status->pid = ret;
+
+  if (terminal_fd > 0)
+  {
+    if (container->context->console_socket)
+      {
+        cleanup_close int console_socket_fd = open_unix_domain_client_socket (
+            container->context->console_socket, 0, err);
+        if (UNLIKELY (console_socket_fd < 0))
+          {
+            ret = crun_make_error (err, 0, "failed to open console socket\n");
+            goto out_umount;
+          }
+
+        ret = send_fd_to_socket (console_socket_fd, terminal_fd, err);
+        if (UNLIKELY (ret < 0))
+          {
+            ret = crun_make_error (err, 0, "failed to send terminal fd\n");
+            goto out_umount;
+          }
+      }
+    else
+    {
+      cleanup_terminal void *orig_terminal = NULL;
+      ret = libcrun_setup_terminal_ptmx (terminal_fd, &orig_terminal, err);
+      if (UNLIKELY (ret < 0))
+        {
+          ret = crun_make_error (err, 0, "failed to setup console\n");
+          goto out_umount;
+        }
+    }
+  }
 
 out_umount:
   ret_out = umount (root);
