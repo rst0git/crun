@@ -32,6 +32,7 @@ with pkgs; stdenv.mkDerivation {
       yajl
     ] ++ lib.optionals enableCriu [ criu ];
   configureFlags = [ "--enable-static" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
+  runtimeDependencies = lib.optional (enableCriu) [ criu ];
   prePatch = ''
     export CFLAGS='-static -pthread'
     export LDFLAGS='-s -w -static-libgcc -static'
