@@ -32,6 +32,7 @@ with pkgs; stdenv.mkDerivation {
       yajl
     ] ++ lib.optionals enableCriu [ criu ];
   configureFlags = [ "--enable-static" ] ++ lib.optional (!enableSystemd) [ "--disable-systemd" ];
+  runtimeDependencies = lib.optional (enableCriu) [ criu ];
   preFixup = lib.optionalString (stdenv?cc.cc.libgcc) ''
     addAutoPatchelfSearchPath ${stdenv.cc.cc.libgcc}/lib
     addAutoPatchelfSearchPath ${stdenv.cc.cc.libgcc}/lib64
